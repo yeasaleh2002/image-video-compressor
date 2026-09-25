@@ -1,0 +1,184 @@
+{
+  "name": "image-video-compressor",
+  "version": "1.0.0",
+  "description": "Secure, isomorphic image & video optimizer for Node.js and the browser. Compress photos to WebP/AVIF and videos with H.264/VP9 CRF (typically 70-90% smaller, original dimensions kept) using sharp, fluent-ffmpeg and ffmpeg.wasm. Includes Express & Next.js middleware, SSRF/path-traversal/pixel-bomb protection and EXIF stripping. Created by Yeasaleh. Inspired by Nurix hive Team.",
+  "author": "Yeasaleh",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.17"
+  },
+  "main": "./dist/node.js",
+  "types": "./dist/node.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/node.d.ts",
+      "browser": "./dist/browser.js",
+      "node": "./dist/node.js",
+      "default": "./dist/browser.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./express": {
+      "types": "./dist/middleware/express.d.ts",
+      "default": "./dist/middleware/express.js"
+    },
+    "./next": {
+      "types": "./dist/middleware/next.d.ts",
+      "default": "./dist/middleware/next.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "yeasaleh",
+    "nurix hive",
+    "nurix-hive",
+    "image-video-compressor",
+    "image video compressor",
+    "image-compressor",
+    "video-optimizer",
+    "compressor",
+    "compress",
+    "compression",
+    "optimizer",
+    "optimiser",
+    "image optimiser",
+    "video optimiser",
+    "media optimiser",
+    "photo optimizer",
+    "photo optimiser",
+    "image-optimiser",
+    "video-optimiser",
+    "optimise images",
+    "optimise video",
+    "ecommerce",
+    "e-commerce",
+    "ecommerce image optimization",
+    "product image optimization",
+    "nurixhive.xyz",
+    "image-video-optimizer",
+    "image video optimizer",
+    "image optimizer",
+    "image-optimizer",
+    "video optimizer",
+    "video compressor",
+    "video-compressor",
+    "photo compressor",
+    "image compressor",
+    "image compression",
+    "video compression",
+    "media optimization",
+    "media optimizer",
+    "media compressor",
+    "optimize images",
+    "optimize video",
+    "compress image",
+    "compress video",
+    "reduce file size",
+    "resize",
+    "webp",
+    "avif",
+    "jpeg",
+    "jpg",
+    "png",
+    "gif",
+    "mp4",
+    "webm",
+    "mov",
+    "h264",
+    "vp9",
+    "crf",
+    "ffmpeg",
+    "ffmpeg.wasm",
+    "ffmpeg-wasm",
+    "wasm",
+    "webassembly",
+    "sharp",
+    "libvips",
+    "fluent-ffmpeg",
+    "isomorphic",
+    "universal",
+    "browser image compression",
+    "browser video compression",
+    "client-side compression",
+    "server-side compression",
+    "express middleware",
+    "express",
+    "nextjs",
+    "next.js",
+    "route handler",
+    "react image optimization",
+    "react",
+    "upload",
+    "file upload",
+    "base64 compressor",
+    "base64",
+    "blob",
+    "buffer",
+    "stream",
+    "secure media",
+    "security",
+    "exif",
+    "strip metadata",
+    "exif remover",
+    "ssrf protection",
+    "path traversal",
+    "pixel bomb",
+    "decompression bomb",
+    "magic numbers",
+    "mime sniffing",
+    "typescript",
+    "performance",
+    "web performance",
+    "core web vitals"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "fluent-ffmpeg": "^2.1.3",
+    "sharp": "^0.34.0"
+  },
+  "optionalDependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0"
+  },
+  "peerDependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.10",
+    "@ffmpeg/util": "^0.12.1"
+  },
+  "peerDependenciesMeta": {
+    "@ffmpeg/ffmpeg": {
+      "optional": true
+    },
+    "@ffmpeg/util": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.10",
+    "@ffmpeg/util": "^0.12.1",
+    "@types/fluent-ffmpeg": "^2.1.27",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
