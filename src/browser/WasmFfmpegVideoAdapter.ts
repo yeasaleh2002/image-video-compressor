@@ -1,18 +1,3 @@
-/**
- * @file Browser video adapter backed by ffmpeg.wasm (`@ffmpeg/ffmpeg` 0.12).
- *
- * - Lazily loads one FFmpeg worker and reuses it. The single-threaded core
- *   can only run one `exec` at a time, so the browser optimizer defaults to
- *   `maxVideoJobs: 1`.
- * - Uses the exact same hardened argv as the native adapter (`ffmpegArgs.ts`).
- * - On timeout the worker is `terminate()`d (the only way to stop a running
- *   WASM exec) and a fresh one is loaded on the next job.
- * - Every file written to the in-memory FS gets a UUID name and is deleted in
- *   `finally`, so the WASM heap doesn't grow across jobs.
- *
- * Self-hosting: pass `coreURL` / `wasmURL` pointing at your own copies of
- * `@ffmpeg/core` to keep the app fully self-contained (no CDN at runtime).
- */
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import { inputArgs, outputArgs, planVideo } from '../adapters/ffmpegArgs.js';
 import type { EncodeResult, JobContext, MediaSource, VideoAdapter } from '../adapters/types.js';
@@ -29,7 +14,6 @@ export interface WasmFfmpegConfig {
 
 interface ProbeInfo { width: number; height: number; duration?: number; hasAudio: boolean; container: string }
 
-/** Parses ffmpeg's `-i` banner. ffmpeg.wasm has no ffprobe in all builds, so we read the log. */
 export function parseProbeLog(lines: string[]): ProbeInfo | null {
   const text = lines.join('\n');
   const container = /Input #0, ([^ ]+), from/.exec(text)?.[1] ?? '';
@@ -84,7 +68,6 @@ export class WasmFfmpegVideoAdapter implements VideoAdapter {
     try {
       await ff.writeFile(inName, src.bytes);
 
-      // ---- 1. Probe (exit code is non-zero because no output is given; that's expected)
       await ff.exec(['-hide_banner', ...inputArgs(plan), '-i', inName]);
       const info = parseProbeLog(logs);
       if (!info) throw new CorruptMediaError('No decodable video stream');
@@ -94,7 +77,6 @@ export class WasmFfmpegVideoAdapter implements VideoAdapter {
       ctx.guard.assertDimensions(info.width, info.height);
       ctx.guard.assertDuration(info.duration);
 
-      // ---- 2. Transcode
       logs.length = 0;
       const code = await ff.exec([
         '-hide_banner', ...inputArgs(plan), '-i', inName,

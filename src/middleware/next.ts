@@ -1,16 +1,3 @@
-/**
- * @file Next.js App Router route handler (Web `Request` → `Response`).
- *
- * @example
- * // app/api/optimize/route.ts
- * import { createNodeOptimizer } from 'image-video-compressor';
- * import { createNextRouteHandler } from 'image-video-compressor/next';
- *
- * export const runtime = 'nodejs';        // sharp/ffmpeg need Node, not Edge
- * export const dynamic = 'force-dynamic';
- * const optimizer = createNodeOptimizer();
- * export const POST = createNextRouteHandler({ optimizer });
- */
 import type { MediaOptimizer } from '../core/MediaOptimizer.js';
 import { PayloadTooLargeError, toErrorResponse, UnsupportedMediaError, ValidationError } from '../errors.js';
 import {
@@ -22,7 +9,6 @@ export interface NextHandlerConfig extends HttpAdapterConfig {
   optimizer: MediaOptimizer;
 }
 
-/** Reads a Web stream body with a hard cap (never trusts Content-Length alone). */
 async function readCapped(req: Request, max: number): Promise<Uint8Array> {
   const declared = Number(req.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > max) throw new PayloadTooLargeError('Request body too large');

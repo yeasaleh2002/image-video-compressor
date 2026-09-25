@@ -1,15 +1,3 @@
-/**
- * @file Browser image adapter: decode with `createImageBitmap`, re-encode with
- * (Offscreen)Canvas.
- *
- * Re-encoding through a canvas is a *complete* sanitiser: the canvas holds
- * only RGBA pixels, so EXIF, XMP, IPTC, ICC, comments and any trailing bytes
- * cannot survive. Orientation is baked in via `imageOrientation: 'from-image'`.
- *
- * Browser encoders differ: WebP everywhere modern, AVIF only in some engines,
- * no lossless WebP control, no palette PNG. Capabilities are probed once and
- * the shared planner picks among what actually works.
- */
 import type { EncodeResult, ImageAdapter, JobContext, MediaSource } from '../adapters/types.js';
 import { planImage, type EncodeFormat } from '../adapters/imagePlan.js';
 import { CorruptMediaError, ProcessingTimeoutError } from '../errors.js';
@@ -34,7 +22,6 @@ function toBlob(canvas: AnyCanvas, type: string, quality: number): Promise<Blob>
 
 let capabilities: Promise<Set<EncodeFormat>> | undefined;
 
-/** Probes which formats this browser can *encode* (unsupported types silently fall back to PNG). */
 function probeEncoders(): Promise<Set<EncodeFormat>> {
   capabilities ??= (async () => {
     const set = new Set<EncodeFormat>(['png', 'jpeg']);
@@ -42,7 +29,7 @@ function probeEncoders(): Promise<Set<EncodeFormat>> {
       try {
         const blob = await toBlob(makeCanvas(1, 1), mimeOf(f), 0.5);
         if (blob.type === mimeOf(f)) set.add(f);
-      } catch { /* not supported */ }
+      } catch {}
     }
     return set;
   })();
@@ -57,7 +44,6 @@ export class CanvasImageAdapter implements ImageAdapter {
     const warnings: string[] = [];
     let available = await probeEncoders();
 
-    // Canvas APIs expose no lossless switch except PNG.
     if (opts.lossless) {
       if (opts.format !== 'auto' && opts.format !== 'png') warnings.push(`Lossless ${opts.format} is unavailable in browsers; used png`);
       available = new Set(['png']);
@@ -88,7 +74,7 @@ export class CanvasImageAdapter implements ImageAdapter {
         const g = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
         if (!g) throw new Error('2D canvas unavailable');
         g.clearRect(0, 0, canvas.width, canvas.height);
-        if (f === 'jpeg') { g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height); } // no alpha in JPEG
+        if (f === 'jpeg') { g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height); }
         g.drawImage(bitmap, 0, 0);
         const blob = await toBlob(canvas, mimeOf(f), opts.quality / 100);
         if (!best || blob.size < best.blob.size) best = { blob, format: f };
@@ -105,7 +91,7 @@ export class CanvasImageAdapter implements ImageAdapter {
       };
     } finally {
       bitmap.close();
-      canvas.width = 0; canvas.height = 0; // release the backing store promptly
+      canvas.width = 0; canvas.height = 0;
     }
   }
 }

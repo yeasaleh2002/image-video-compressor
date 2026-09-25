@@ -1,7 +1,3 @@
-/**
- * @file Node runtime: ingestion (buffers, base64, jailed paths, SSRF-safe
- * URLs), shape-preserving output, and adapter wiring.
- */
 import { constants as fsc, createWriteStream } from 'node:fs';
 import { copyFile, open, readFile, writeFile, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
@@ -21,11 +17,8 @@ import { SharpImageAdapter } from './SharpImageAdapter.js';
 import { createNodeWorkspace } from './workspace.js';
 
 export interface NodePlatformConfig extends FfmpegBinaries {
-  /** Directories `{ path }` inputs may read from. Empty (default) = path inputs disabled. */
   allowedRoots?: string[];
-  /** Where optimized files for `{ path }` inputs are written. Default: next to the input. Must be inside `allowedRoots`. */
   outputDir?: string;
-  /** Base for per-job temp dirs. Default `os.tmpdir()`. */
   tempDir?: string;
   maxVideoJobs: number;
 }
@@ -34,7 +27,7 @@ export class NodePlatform implements Platform {
   readonly image = new SharpImageAdapter();
   readonly video: FluentFfmpegVideoAdapter;
   private readonly paths: PathGuard;
-  /** Real path of a `{ path }` input, per job, so `emit` can place the output next to it. */
+
   private readonly origins = new WeakMap<Workspace, string>();
 
   constructor(private readonly guard: SecurityGuard, private readonly config: NodePlatformConfig) {
@@ -46,23 +39,19 @@ export class NodePlatform implements Platform {
     return createNodeWorkspace(this.config.tempDir);
   }
 
-  /* --------------------------------------------------------------------- */
-  /* Ingestion                                                             */
-  /* --------------------------------------------------------------------- */
-
   async ingest(input: MediaInput, ws: Workspace, _requested: NormalizedOptions['mediaType'], signal: AbortSignal): Promise<Ingested> {
     switch (classifyInput(input)) {
       case 'bytes': return this.fromBytes(input as Uint8Array, ws);
       case 'arraybuffer': return this.fromBytes(new Uint8Array(input as ArrayBuffer), ws);
       case 'blob': {
         const blob = input as Blob;
-        this.guard.assertSize(blob.size, 'unknown'); // before arrayBuffer() allocates
+        this.guard.assertSize(blob.size, 'unknown');
         return this.fromBytes(new Uint8Array(await blob.arrayBuffer()), ws);
       }
       case 'dataurl': {
         let parsed;
         try { parsed = parseDataUrl(input as string); } catch (e) { throw new ValidationError((e as Error).message); }
-        return this.fromBase64(parsed.base64, ws); // the declared MIME is ignored: magic numbers decide
+        return this.fromBase64(parsed.base64, ws);
       }
       case 'base64': return this.fromBase64((input as { base64: string }).base64, ws);
       case 'path': {
@@ -88,7 +77,7 @@ export class NodePlatform implements Platform {
   }
 
   private fromBase64(b64: string, ws: Workspace): Promise<Ingested> {
-    this.guard.assertBase64Size(b64.length); // before decoding
+    this.guard.assertBase64Size(b64.length);
     let bytes: Uint8Array;
     try { bytes = decodeBase64(b64); } catch { throw new ValidationError('Invalid base64 payload'); }
     return this.fromBytes(bytes, ws);
@@ -98,19 +87,12 @@ export class NodePlatform implements Platform {
     this.guard.assertSize(bytes.byteLength, 'unknown');
     const detected = detectMedia(bytes);
     if (detected.kind === 'image') return { source: { type: 'bytes', bytes }, size: bytes.byteLength, detected };
-    // Videos go to disk so ffmpeg can seek; the caller's buffer is already in memory anyway.
+
     const file = ws.tempPath(detected.format);
     await writeFile(file, bytes, { flag: 'wx', mode: 0o600 });
     return { source: { type: 'file', path: file, size: bytes.byteLength }, size: bytes.byteLength, detected };
   }
 
-  /**
-   * Common path for file-backed input. Reads only the header first, so the
-   * per-kind size limit is enforced *before* a large image is buffered.
-   *
-   * @param inWorkspace The file's path if it already lives in the workspace
-   *                    (URL download), or `false` if it must be copied in.
-   */
   private async fromHandle(handle: FileHandle, size: number, ws: Workspace, inWorkspace: string | false): Promise<Ingested> {
     this.guard.assertSize(size, 'unknown');
     const head = new Uint8Array(Math.min(size, SNIFF_BYTES));
@@ -129,8 +111,6 @@ export class NodePlatform implements Platform {
     if (inWorkspace) {
       source = { type: 'file', path: inWorkspace, size };
     } else {
-      // Copy through the already-validated handle (never re-open the user path),
-      // streaming with a hard byte cap in case the file grows mid-copy.
       const file = ws.tempPath(detected.format);
       let copied = 0;
       const max = this.guard.maxBytesFor('video');
@@ -149,10 +129,6 @@ export class NodePlatform implements Platform {
     return { source, size, detected };
   }
 
-  /* --------------------------------------------------------------------- */
-  /* Output (same container as input)                                      */
-  /* --------------------------------------------------------------------- */
-
   async emit(input: MediaInput, result: EncodeResult, ws: Workspace): Promise<unknown> {
     const kind = classifyInput(input);
     if (kind === 'path') return this.emitToPath(result, ws);
@@ -168,12 +144,11 @@ export class NodePlatform implements Platform {
     }
   }
 
-  /** Writes next to the input (or to `outputDir`) under a collision-free name; never overwrites. */
   private async emitToPath(result: EncodeResult, ws: Workspace): Promise<string> {
     const origin = this.origins.get(ws);
     if (!origin) throw new Error('Missing input origin for path output');
     const dir = this.config.outputDir ? await this.paths.resolveOutputDir(this.config.outputDir) : path.dirname(origin);
-    // Sanitise the stem: it came from the user's filename.
+
     const stem = path.basename(origin, path.extname(origin)).replace(/[^\w.-]+/g, '_').slice(0, 100) || 'media';
     const dest = path.join(dir, `${stem}-optimized-${uuid().slice(0, 8)}.${extFor(result.format)}`);
 

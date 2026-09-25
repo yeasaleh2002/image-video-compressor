@@ -18,7 +18,6 @@ let root: string;
 let tmp: string;
 let photo: Buffer;
 
-/** A noisy 1600x1200 "photo" with EXIF (GPS-style comment) and an ICC profile. */
 async function makePhoto(): Promise<Buffer> {
   const { width, height } = { width: 1600, height: 1200 };
   const raw = Buffer.alloc(width * height * 3);
@@ -73,7 +72,7 @@ describe('images (sharp)', () => {
     expect(res.success).toBe(true);
     expect(Buffer.isBuffer(res.data)).toBe(true);
     expect(['avif', 'webp', 'jpeg']).toContain(res.format);
-    expect(res.optimizedSize).toBeLessThan(res.originalSize * 0.3); // > 70 % smaller
+    expect(res.optimizedSize).toBeLessThan(res.originalSize * 0.3);
     const meta = await sharp(res.data).metadata();
     expect([meta.width, meta.height]).toEqual([1600, 1200]);
     expect(meta.exif).toBeUndefined();

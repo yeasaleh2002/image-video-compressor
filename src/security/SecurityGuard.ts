@@ -1,11 +1,3 @@
-/**
- * @file Runtime-agnostic security checks. Node-only checks (file-system jail,
- * DNS resolution + IP pinning) live in `./node/*` and build on this class.
- *
- * Design rule: every check **fails closed**. Anything not explicitly allowed —
- * unknown option keys, odd ports, IP literals we can't parse, formats outside
- * the allow-list — is rejected.
- */
 import {
   DimensionLimitError, PayloadTooLargeError, SsrfBlockedError, UnsupportedMediaError, ValidationError,
 } from '../errors.js';
@@ -29,7 +21,6 @@ export const DEFAULT_LIMITS: SecurityLimits = {
   videoTimeoutMs: 10 * 60_000,
 };
 
-/** Options after validation and default-filling. Encoders only ever see this shape. */
 export interface NormalizedOptions {
   mediaType: 'image' | 'video' | 'auto';
   image: { quality: number; format: ImageOutputFormat; lossless: boolean };
@@ -39,7 +30,6 @@ export interface NormalizedOptions {
 const IMAGE_FORMATS: readonly ImageOutputFormat[] = ['webp', 'avif', 'jpeg', 'png', 'auto'];
 const VIDEO_PRESETS: readonly VideoPreset[] = ['ultrafast', 'superfast', 'fast', 'medium'];
 
-/** Hostnames that resolve to internal infrastructure regardless of DNS. */
 const BLOCKED_HOSTNAMES = [/^localhost$/i, /\.localhost$/i, /\.local$/i, /\.internal$/i, /^metadata$/i];
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -66,11 +56,6 @@ export class SecurityGuard {
     this.limits = { ...DEFAULT_LIMITS, ...limits };
   }
 
-  /**
-   * Validates an untrusted options payload (it may come straight from JSON) and
-   * fills defaults. Unknown keys are rejected rather than ignored so typos and
-   * prototype-pollution payloads (`__proto__`, `constructor`) surface loudly.
-   */
   normalizeOptions(raw: unknown): NormalizedOptions {
     const input = raw ?? { mediaType: 'auto' };
     if (!isPlainObject(input)) throw new ValidationError('options must be an object');
@@ -97,7 +82,7 @@ export class SecurityGuard {
     const crf = vid.crf === undefined ? 28 : intInRange(vid.crf, 0, 51, 'videoSettings.crf');
     const preset = (vid.preset ?? 'fast') as VideoPreset;
     if (!VIDEO_PRESETS.includes(preset)) throw new ValidationError(`videoSettings.preset must be one of ${VIDEO_PRESETS.join(', ')}`);
-    // audioBitrate reaches ffmpeg's argv: whitelist the exact shape, never pass free text.
+
     const audioBitrate = vid.audioBitrate ?? '96k';
     const m = typeof audioBitrate === 'string' ? /^(\d{2,3})k$/.exec(audioBitrate) : null;
     if (!m || Number(m[1]) < 16 || Number(m[1]) > 320) throw new ValidationError('videoSettings.audioBitrate must look like "64k" (16k-320k)');
@@ -110,14 +95,12 @@ export class SecurityGuard {
     };
   }
 
-  /** Byte ceiling for a given kind (or the larger one while the kind is still unknown). */
   maxBytesFor(kind: MediaKind | 'unknown'): number {
     if (kind === 'image') return this.limits.maxImageBytes;
     if (kind === 'video') return this.limits.maxVideoBytes;
     return Math.max(this.limits.maxImageBytes, this.limits.maxVideoBytes);
   }
 
-  /** Rejects a byte count before it is buffered. */
   assertSize(bytes: number, kind: MediaKind | 'unknown'): void {
     if (!Number.isFinite(bytes) || bytes < 0) throw new ValidationError('Invalid input size');
     if (bytes === 0) throw new ValidationError('Input is empty');
@@ -125,15 +108,10 @@ export class SecurityGuard {
     if (bytes > max) throw new PayloadTooLargeError(`Input exceeds the ${Math.floor(max / 1024 / 1024)} MiB limit`);
   }
 
-  /**
-   * Upper bound on decoded size for base64 text, computed *before* decoding so
-   * a 2 GB string never becomes a 1.5 GB buffer.
-   */
   assertBase64Size(b64Length: number): void {
     this.assertSize(Math.floor((b64Length * 3) / 4), 'unknown');
   }
 
-  /** Cross-checks the sniffed type against the caller's `mediaType` and the per-kind byte limit. */
   assertDetected(detected: DetectedMedia, requested: NormalizedOptions['mediaType'], bytes?: number): void {
     if (requested !== 'auto' && requested !== detected.kind) {
       throw new UnsupportedMediaError(`Expected ${requested} but content is ${detected.kind}/${detected.format}`);
@@ -144,7 +122,6 @@ export class SecurityGuard {
     }
   }
 
-  /** Decompression-bomb guard. Called with header dimensions *before* any decode. */
   assertDimensions(width: number, height: number, frames = 1): void {
     const { maxDimension, maxPixels, maxAnimationFrames } = this.limits;
     if (width > maxDimension || height > maxDimension) {
@@ -160,12 +137,6 @@ export class SecurityGuard {
     }
   }
 
-  /**
-   * Static URL checks that need no network: scheme, credentials, port, and
-   * hostname/IP-literal deny-lists. Node additionally resolves DNS and pins the
-   * vetted IP (see `node/ssrf.ts`); browsers can't see resolved IPs, so this is
-   * the strongest check available there.
-   */
   validateUrl(raw: string): URL {
     if (typeof raw !== 'string' || raw.length > 2048) throw new ValidationError('url must be a string up to 2048 chars');
     let url: URL;

@@ -1,17 +1,3 @@
-/**
- * @file Express (and any Connect-style / raw `node:http`) middleware.
- *
- * @example
- * import express from 'express';
- * import { createNodeOptimizer } from 'image-video-compressor';
- * import { optimizeMiddleware } from 'image-video-compressor/express';
- *
- * const optimizer = createNodeOptimizer();
- * const app = express();
- * // Do NOT mount express.json() on this route: the middleware reads the body
- * // itself with a hard byte cap. (If you do, your parser's limit applies.)
- * app.post('/api/optimize', optimizeMiddleware({ optimizer }));
- */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { MediaOptimizer } from '../core/MediaOptimizer.js';
 import { OptimizerError, PayloadTooLargeError, toErrorResponse, UnsupportedMediaError, ValidationError } from '../errors.js';
@@ -27,7 +13,6 @@ export interface ExpressMiddlewareConfig extends HttpAdapterConfig {
 type Req = IncomingMessage & { body?: unknown };
 type Next = (err?: unknown) => void;
 
-/** Reads the request stream into memory, aborting as soon as `max` is exceeded. */
 function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const declared = Number(req.headers['content-length']);
@@ -41,7 +26,7 @@ function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
       total += c.length;
       if (total > max) {
         req.removeAllListeners('data');
-        req.resume(); // drain without buffering so the socket can still carry our 413
+        req.resume();
         reject(new PayloadTooLargeError('Request body too large'));
         return;
       }
@@ -64,11 +49,6 @@ function sendError(res: ServerResponse, err: unknown, cfg: HttpAdapterConfig): v
   send(res, payload.code, JSON.stringify(payload), { 'Content-Type': 'application/json; charset=utf-8' });
 }
 
-/**
- * Returns an Express-compatible `(req, res, next)` handler.
- * The handler always ends the response; `next` is never called with an error,
- * so your app's error handler cannot accidentally leak stack traces.
- */
 export function optimizeMiddleware(config: ExpressMiddlewareConfig) {
   const { optimizer } = config;
   const maxJson = config.maxJsonBytes ?? DEFAULT_MAX_JSON;
@@ -83,7 +63,6 @@ export function optimizeMiddleware(config: ExpressMiddlewareConfig) {
       const ct = req.headers['content-type'];
 
       if (isJsonContentType(ct)) {
-        // Honour a body already parsed by express.json(); otherwise parse it ourselves.
         let body = req.body;
         if (body === undefined || Buffer.isBuffer(body)) {
           const raw = Buffer.isBuffer(body) ? body : await readBody(req, maxJson);

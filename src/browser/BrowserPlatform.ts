@@ -1,6 +1,3 @@
-/**
- * @file Browser runtime: in-memory ingestion and shape-preserving output.
- */
 import type { EncodeResult, Ingested, Platform, Workspace } from '../adapters/types.js';
 import { classifyInput } from '../core/inputKind.js';
 import { decodeBase64, encodeBase64, parseDataUrl } from '../core/util.js';
@@ -12,7 +9,6 @@ import { browserFetch } from './browserFetch.js';
 import { CanvasImageAdapter } from './CanvasImageAdapter.js';
 import { WasmFfmpegVideoAdapter, type WasmFfmpegConfig } from './WasmFfmpegVideoAdapter.js';
 
-/** Browsers hold everything in memory; there is nothing on disk to clean. */
 const NOOP_WORKSPACE: Workspace = {
   tempPath: () => { throw new Error('No file system in the browser'); },
   dispose: async () => {},
@@ -37,7 +33,7 @@ export class BrowserPlatform implements Platform {
       case 'arraybuffer': bytes = new Uint8Array(input as ArrayBuffer); break;
       case 'blob': {
         const blob = input as Blob;
-        this.guard.assertSize(blob.size, 'unknown'); // before reading it into memory
+        this.guard.assertSize(blob.size, 'unknown');
         bytes = new Uint8Array(await blob.arrayBuffer());
         break;
       }

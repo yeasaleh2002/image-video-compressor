@@ -1,17 +1,7 @@
-/**
- * @file Browser URL fetching with CORS-aware errors, per-attempt timeout,
- * streaming byte cap and exponential-backoff retry.
- *
- * Browsers hide resolved IPs and cross-origin redirect targets from scripts,
- * so the SSRF guard here is the static `validateUrl` check. That's adequate:
- * a browser request runs with the *user's* network position, not a server's,
- * and the browser's own Private Network Access rules apply on top.
- */
 import { parseRetryAfter, TransientError, withRetry } from '../core/retry.js';
 import { FetchFailedError, OptimizerError, PayloadTooLargeError } from '../errors.js';
 import type { SecurityGuard } from '../security/SecurityGuard.js';
 
-/** `AbortSignal.any` fallback for browsers that predate it. */
 function anySignal(signals: AbortSignal[]): AbortSignal {
   const native = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any;
   if (native) return native(signals);
@@ -62,14 +52,12 @@ export async function browserFetch(rawUrl: string, guard: SecurityGuard, outer: 
       try {
         res = await fetch(url, {
           mode: 'cors',
-          credentials: 'omit',          // never leak the user's cookies to third parties
+          credentials: 'omit',
           referrerPolicy: 'no-referrer',
           cache: 'no-store',
           signal: anySignal([outer, timeoutSignal(guard.limits.fetchTimeoutMs)]),
         });
       } catch (err) {
-        // A CORS rejection and a network outage are indistinguishable to scripts
-        // (both are TypeError). Treat as transient; the final error mentions CORS.
         throw new TransientError('Network or CORS failure', undefined, { cause: err });
       }
       if (res.status === 408 || res.status === 429 || res.status >= 500) {

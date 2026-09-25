@@ -1,17 +1,3 @@
-/**
- * @file The runtime-agnostic orchestrator.
- *
- * Pipeline for every call:
- *
- *   options ──► normalizeOptions (reject unknown keys, clamp ranges)
- *   input   ──► platform.ingest   (size cap BEFORE buffering → magic numbers →
- *                                  header dimensions → mediaType cross-check)
- *           ──► limiter.run       (bounded queue, per-job deadline + abort)
- *           ──► adapter.optimize  (sharp / canvas / ffmpeg / ffmpeg.wasm,
- *                                  metadata stripped, dimensions preserved)
- *           ──► platform.emit     (same container shape as the input)
- *   finally ──► workspace.dispose (temp files removed on success AND failure)
- */
 import type { EncodeResult, Platform } from '../adapters/types.js';
 import { OptimizerError, ProcessingError, toErrorResponse } from '../errors.js';
 import { SecurityGuard } from '../security/SecurityGuard.js';
@@ -42,30 +28,17 @@ export class MediaOptimizer {
     this.videoLimiter = new ConcurrencyLimiter(c.maxVideoJobs, c.maxQueue);
   }
 
-  /** Queue depth, for health checks / autoscaling metrics. */
   get stats() {
     return { image: this.imageLimiter.stats, video: this.videoLimiter.stats };
   }
 
-  /**
-   * Optimizes one image or video.
-   *
-   * @throws {OptimizerError} subclasses on any validation, security or processing failure.
-   *
-   * @example
-   * const res = await optimizer.optimize({ path: 'uploads/cat.jpg' }, {
-   *   mediaType: 'auto', imageSettings: { format: 'auto', quality: 75 },
-   * });
-   * res.data; // → 'uploads/cat-optimized-1f2e3d4c.avif'
-   */
   async optimize<I extends MediaInput>(
     input: I,
     options: OptimizationOptions = { mediaType: 'auto' },
   ): Promise<DetailedOptimizationResponse<OutputFor<I>>> {
     const opts = this.guard.normalizeOptions(options);
     const ws = await this.platform.createWorkspace();
-    // Ingestion (downloads, file reads) gets its own deadline so a slow-loris
-    // upstream can't hold a workspace open forever.
+
     const ingestAbort = new AbortController();
     const ingestTimer = setTimeout(
       () => ingestAbort.abort(new ProcessingError('Input ingestion timed out')),
@@ -118,8 +91,7 @@ export class MediaOptimizer {
       };
     } catch (err) {
       if (err instanceof OptimizerError) throw err;
-      // Unknown failures are wrapped so callers only ever see our taxonomy
-      // (the original is kept as `cause` for server-side logging).
+
       throw new ProcessingError(undefined, { cause: err });
     } finally {
       clearTimeout(ingestTimer);
@@ -127,10 +99,6 @@ export class MediaOptimizer {
     }
   }
 
-  /**
-   * Like {@link optimize} but never throws: returns the success response or
-   * the standard `{ success: false, error, code }` envelope.
-   */
   async optimizeSafe<I extends MediaInput>(
     input: I,
     options?: OptimizationOptions,

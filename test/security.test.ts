@@ -8,7 +8,6 @@ import { isBlockedIp } from '../src/security/ip.js';
 import { detectMedia } from '../src/security/magic.js';
 import { SecurityGuard } from '../src/security/SecurityGuard.js';
 
-/** Minimal PNG header (signature + IHDR) claiming arbitrary dimensions. */
 function pngHeader(w: number, h: number): Uint8Array {
   const b = Buffer.alloc(33);
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);

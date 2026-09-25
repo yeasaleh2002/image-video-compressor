@@ -1,20 +1,3 @@
-/**
- * @file Single source of truth for ffmpeg arguments, shared by the native
- * (fluent-ffmpeg) and WASM adapters.
- *
- * Security notes — ffmpeg is a huge attack surface, so we narrow it:
- *  - **Forced demuxer (`-f`).** The demuxer is chosen from *our* magic-number
- *    detection, never ffmpeg's own probing. This kills the classic
- *    "HLS playlist disguised as .avi/.mp4" SSRF / local-file-read attack,
- *    because the `hls`/`concat` demuxers can never be selected.
- *  - **`-protocol_whitelist file,pipe`.** Even if a demuxer tries to open a
- *    nested resource, network protocols are unavailable.
- *  - **No user text in argv.** Every value is derived from validated enums
- *    or integers; `audioBitrate` is regex-whitelisted upstream.
- *  - **Metadata stripped.** `-map_metadata -1`, `-map_chapters -1`, and only
- *    the first video/audio streams are mapped, so subtitle/data/attachment
- *    streams (fonts, embedded payloads) are dropped.
- */
 import type { NormalizedOptions } from '../security/SecurityGuard.js';
 import type { DetectedFormat } from '../types.js';
 
@@ -31,10 +14,6 @@ const DEMUXER: Partial<Record<DetectedFormat, string>> = {
   mp4: 'mov', mov: 'mov', webm: 'matroska', mkv: 'matroska', avi: 'avi',
 };
 
-/**
- * Keeps the input container where it's web-friendly; AVI (no modern codec
- * story) is upgraded to MP4 and a warning is attached.
- */
 export function planVideo(format: DetectedFormat): VideoPlan {
   const demuxer = DEMUXER[format];
   if (!demuxer) throw new Error(`No demuxer for ${format}`);
@@ -47,12 +26,10 @@ export function planVideo(format: DetectedFormat): VideoPlan {
   }
 }
 
-/** Options that go *before* `-i`. */
 export function inputArgs(plan: VideoPlan): string[] {
   return ['-protocol_whitelist', 'file,pipe', '-f', plan.demuxer];
 }
 
-/** libvpx `-cpu-used` equivalents of the x264 presets (higher = faster). */
 const VP9_SPEED: Record<NormalizedOptions['video']['preset'], string> = {
   ultrafast: '5', superfast: '4', fast: '3', medium: '2',
 };
@@ -61,11 +38,9 @@ export interface OutputArgOptions {
   width: number;
   height: number;
   hasAudio: boolean;
-  /** Encoder threads (native: CPU-aware; WASM: 1). */
   threads: number;
 }
 
-/** Options that go *after* `-i` (excluding the output path). */
 export function outputArgs(plan: VideoPlan, o: NormalizedOptions['video'], v: OutputArgOptions): string[] {
   const args: string[] = [
     '-map', '0:v:0',
@@ -77,14 +52,13 @@ export function outputArgs(plan: VideoPlan, o: NormalizedOptions['video'], v: Ou
 
   const vp9 = plan.outFormat === 'webm';
   if (vp9) {
-    // VP9 CRF spans 0-63; rescale the x264-style 0-51 value so "28" means similar quality.
     const crf = Math.round((o.crf * 63) / 51);
     args.push('-c:v', 'libvpx-vp9', '-crf', String(crf), '-b:v', '0', '-row-mt', '1',
       '-deadline', 'good', '-cpu-used', VP9_SPEED[o.preset], '-pix_fmt', 'yuv420p');
   } else {
     args.push('-c:v', 'libx264', '-crf', String(o.crf), '-preset', o.preset,
       '-profile:v', 'high', '-pix_fmt', 'yuv420p');
-    // 4:2:0 chroma needs even dimensions. Trim at most 1px rather than fail.
+
     if (v.width % 2 || v.height % 2) {
       args.push('-vf', 'crop=trunc(iw/2)*2:trunc(ih/2)*2');
       plan.warnings.push(`Odd dimensions ${v.width}x${v.height} trimmed by 1px for H.264 4:2:0`);

@@ -1,6 +1,3 @@
-/**
- * @file Classifies a `MediaInput` without ever guessing what a bare string is.
- */
 import { ValidationError } from '../errors.js';
 import type { MediaInput } from '../types.js';
 
@@ -25,7 +22,6 @@ export function classifyInput(input: MediaInput): InputKind {
   throw new ValidationError('Unsupported input: pass a Buffer/Uint8Array, ArrayBuffer, Blob, data: URL, { base64 }, { url } or { path }');
 }
 
-/** File extension for an output format. */
 export function extFor(format: string): string {
   return format === 'jpeg' ? 'jpg' : format;
 }
