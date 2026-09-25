@@ -12,6 +12,8 @@
 
 Created by **Yeasaleh** · Inspired by **Nurix hive Team**
 
+### Package Link: https://www.npmjs.com/search?q=image-video-compressor
+
 </div>
 
 ---
