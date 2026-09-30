@@ -12,7 +12,7 @@
 
 Created by **Yeasaleh** · Inspired by **Nurix hive Team**
 
-### Package Link: https://www.npmjs.com/search?q=image-video-compressor
+### Package Link: https://www.npmjs.com/package/image-video-compressor?activeTab=readme
 
 </div>
 
